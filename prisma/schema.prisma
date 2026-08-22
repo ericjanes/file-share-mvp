@@ -1,0 +1,332 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  LOCKED
+}
+
+enum FileStatus {
+  PENDING
+  PROCESSING
+  READY
+  REJECTED
+  HIDDEN
+  DELETED
+}
+
+enum FileVisibility {
+  PUBLIC
+  PRIVATE
+  UNLISTED
+}
+
+enum DownloadStatus {
+  VALID
+  BLOCKED
+  FRAUDULENT
+}
+
+enum ReferralStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum RevenueSource {
+  FILE_DOWNLOAD
+  AD_IMPRESSION
+  AD_CLICK
+  REFERRAL_COMMISSION
+  MANUAL_ADJUSTMENT
+}
+
+enum RevenueStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum BalanceTransactionType {
+  CREDIT
+  DEBIT
+}
+
+enum BalanceTransactionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+}
+
+enum ReportStatus {
+  OPEN
+  REVIEWED
+  RESOLVED
+  REJECTED
+}
+
+enum AuditEventType {
+  USER_SIGNUP
+  USER_LOGIN
+  USER_LOGOUT
+  FILE_UPLOAD
+  FILE_DELETE
+  FILE_DOWNLOAD
+  FILE_VISIBILITY_CHANGE
+  REFERRAL_CREATED
+  REVENUE_POSTED
+  WITHDRAWAL_REQUEST
+  ADMIN_ACTION
+  SECURITY_EVENT
+}
+
+model User {
+  id              String         @id @default(uuid())
+  email           String         @unique
+  emailVerifiedAt DateTime?
+  passwordHash    String?
+  name            String?
+  avatarUrl       String?
+  role            UserRole       @default(USER)
+  status          UserStatus     @default(ACTIVE)
+  referralCode    String         @unique
+  bio             String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  files            File[]
+  reports          Report[]
+  auditLogs        AuditLog[]
+  sessions         Session[]
+  downloads        Download[]
+  balance          UserBalance?
+  balanceTxns      BalanceTransaction[]
+  withdrawals      Withdrawal[]
+  revenueEvents    RevenueEvent[]
+  createdReports   Report[] @relation("ReportCreatedBy")
+
+  referralsMade    Referral[] @relation("ReferralReferrerUser")
+  referralReceived Referral? @relation("ReferralReferredUser")
+
+  @@index([email])
+  @@index([role, status])
+  @@index([createdAt])
+}
+
+model Session {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String
+  ipAddress String?
+  userAgent String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
+model File {
+  id            String         @id @default(uuid())
+  ownerId       String
+  owner         User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  originalName  String
+  storageKey    String         @unique
+  fileSizeBytes Int
+  mimeType      String
+  status        FileStatus     @default(PENDING)
+  visibility    FileVisibility @default(PUBLIC)
+  downloadCount Int            @default(0)
+  expiresAt     DateTime?
+  passwordHash  String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  deletedAt     DateTime?
+
+  downloads     Download[]
+  reports       Report[]
+  revenueEvents RevenueEvent[]
+
+  @@index([ownerId, createdAt])
+  @@index([status, createdAt])
+  @@index([visibility, createdAt])
+  @@index([storageKey])
+}
+
+model Download {
+  id          String         @id @default(uuid())
+  fileId      String
+  file        File           @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ipHash      String?
+  userAgent   String?
+  referer     String?
+  countryCode String?
+  status      DownloadStatus @default(VALID)
+  isBot       Boolean        @default(false)
+  isValid     Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+
+  revenueEvents RevenueEvent[]
+
+  @@index([fileId, createdAt])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([isBot, createdAt])
+}
+
+model Referral {
+  id               String         @id @default(uuid())
+  referrerId       String
+  referredUserId   String         @unique
+  status           ReferralStatus @default(ACTIVE)
+  createdAt        DateTime       @default(now())
+  commissionRate   Decimal?       @db.Decimal(10, 4)
+  totalCommission  Decimal?       @db.Decimal(12, 2) @default(0)
+
+  referrer         User           @relation("ReferralReferrerUser", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredUser     User           @relation("ReferralReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
+
+  @@index([referrerId, createdAt])
+  @@index([referredUserId])
+  @@unique([referrerId, referredUserId])
+}
+
+model RevenueEvent {
+  id            String        @id @default(uuid())
+  userId        String?
+  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  fileId        String?
+  file          File?         @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  downloadId    String?
+  download      Download?     @relation(fields: [downloadId], references: [id], onDelete: SetNull)
+  source        RevenueSource
+  grossRevenue  Decimal       @db.Decimal(12, 2)
+  uploaderShare Decimal       @db.Decimal(12, 2)
+  referralShare Decimal       @db.Decimal(12, 2)
+  platformShare Decimal       @db.Decimal(12, 2)
+  status        RevenueStatus @default(PENDING)
+  createdAt     DateTime      @default(now())
+
+  @@index([userId, createdAt])
+  @@index([fileId, createdAt])
+  @@index([source, createdAt])
+  @@index([status, createdAt])
+}
+
+model UserBalance {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pendingBalance   Decimal  @default(0) @db.Decimal(12, 2)
+  availableBalance Decimal  @default(0) @db.Decimal(12, 2)
+  lifetimeEarnings Decimal  @default(0) @db.Decimal(12, 2)
+  updatedAt        DateTime @updatedAt
+
+  @@index([availableBalance])
+  @@index([pendingBalance])
+}
+
+model BalanceTransaction {
+  id                String                   @id @default(uuid())
+  userId            String
+  user              User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type              BalanceTransactionType
+  amount            Decimal                  @db.Decimal(12, 2)
+  currency          String                   @default("USD")
+  relatedEntityType String?
+  relatedEntityId   String?
+  description       String
+  status            BalanceTransactionStatus @default(APPROVED)
+  createdAt         DateTime                 @default(now())
+
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+  @@index([status, createdAt])
+}
+
+model Withdrawal {
+  id          String           @id @default(uuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount      Decimal          @db.Decimal(12, 2)
+  method      String
+  accountInfo String
+  status      WithdrawalStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  processedAt DateTime?
+  notes       String?
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+model Report {
+  id         String      @id @default(uuid())
+  reporterId String
+  reporter   User        @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  creatorId  String?
+  creator    User?       @relation("ReportCreatedBy", fields: [creatorId], references: [id], onDelete: SetNull)
+  fileId     String?
+  file       File?       @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  reason     String
+  details    String?
+  status     ReportStatus @default(OPEN)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@index([fileId, createdAt])
+  @@index([reporterId, createdAt])
+  @@index([status, createdAt])
+}
+
+model AuditLog {
+  id        String        @id @default(uuid())
+  userId    String?
+  user      User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  entityType String
+  entityId  String?
+  action    AuditEventType
+  message   String
+  metadata  Json?
+  ipAddress String?
+  createdAt DateTime      @default(now())
+
+  @@index([userId, createdAt])
+  @@index([entityType, entityId])
+  @@index([action, createdAt])
+}
+
+model SystemSetting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+  isPublic    Boolean  @default(false)
+  updatedBy   String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@index([key])
+}
