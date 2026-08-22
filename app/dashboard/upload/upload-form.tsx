@@ -30,9 +30,13 @@ export function UploadForm({ error: initialError }: { error?: string }) {
 
     try {
       const file = selectedFile;
+      const handleUploadUrl = typeof window !== "undefined"
+        ? `${window.location.origin}/api/upload`
+        : "/api/upload";
+
       const newBlob = await upload(file.name, file, {
         access: "public",
-        handleUploadUrl: "/api/upload",
+        handleUploadUrl,
       });
 
       const formData = new FormData();
