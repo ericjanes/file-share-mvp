@@ -1,6 +1,5 @@
 "use client";
 
-import { upload } from "@vercel/blob/client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -30,8 +29,10 @@ export function UploadForm({ error: initialError }: { error?: string }) {
 
     try {
       const file = selectedFile;
+      const pathname = `uploads/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+      const callbackUrl = typeof window !== "undefined" ? `${window.location.origin}/api/upload` : "/api/upload";
 
-      const response = await fetch("/api/upload", {
+      const tokenResponse = await fetch("/api/upload", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -39,15 +40,15 @@ export function UploadForm({ error: initialError }: { error?: string }) {
         body: JSON.stringify({
           type: "blob.generate-client-token",
           payload: {
-            pathname: `uploads/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`,
-            callbackUrl: typeof window !== "undefined" ? `${window.location.origin}/api/upload` : "/api/upload",
+            pathname,
+            callbackUrl,
             clientPayload: null,
             multipart: false,
           },
         }),
       });
 
-      const data = (await response.json()) as {
+      const tokenData = (await tokenResponse.json()) as {
         clientToken?: string;
         url?: string;
         uploadUrl?: string;
@@ -55,46 +56,33 @@ export function UploadForm({ error: initialError }: { error?: string }) {
         error?: string;
       };
 
-      if (!response.ok || (!data.clientToken && !data.url && !data.uploadUrl && !data.signedUrl)) {
-        throw new Error(data.error || "Không thể tạo upload token");
+      if (!tokenResponse.ok || (!tokenData.clientToken && !tokenData.url && !tokenData.uploadUrl && !tokenData.signedUrl)) {
+        throw new Error(tokenData.error || "Không thể tạo upload token");
       }
 
-      let newBlob: { url: string };
-
-      if (data.url || data.uploadUrl || data.signedUrl) {
-        const directUrl = data.url ?? data.uploadUrl ?? data.signedUrl;
-        if (!directUrl) {
-          throw new Error("Thiếu URL upload trực tiếp");
-        }
-
-        const directUploadResponse = await fetch(directUrl, {
-          method: "PUT",
-          headers: {
-            "Content-Type": file.type || "application/octet-stream",
-          },
-          body: file,
-        });
-
-        if (!directUploadResponse.ok) {
-          const detail = await directUploadResponse.text().catch(() => "");
-          throw new Error(detail || `Upload trực tiếp thất bại (${directUploadResponse.status})`);
-        }
-
-        newBlob = { url: directUrl };
-      } else {
-        if (!data.clientToken) {
-          throw new Error("Thiếu client token để upload file");
-        }
-
-        const uploadWithToken = upload as any;
-        newBlob = await uploadWithToken(file.name, file, {
-          access: "public",
-          handleUploadToken: data.clientToken,
-        });
+      const uploadUrl = tokenData.url ?? tokenData.uploadUrl ?? tokenData.signedUrl;
+      if (!uploadUrl) {
+        throw new Error("API upload không trả về URL upload hợp lệ");
       }
 
+      console.log("Uploading directly to Vercel Blob with URL:", uploadUrl);
+
+      const directUploadResponse = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": file.type || "application/octet-stream",
+        },
+        body: file,
+      });
+
+      if (!directUploadResponse.ok) {
+        const detail = await directUploadResponse.text().catch(() => "");
+        throw new Error(detail || `Upload trực tiếp thất bại (${directUploadResponse.status})`);
+      }
+
+      const publicUrl = uploadUrl.split("?")[0];
       const formData = new FormData();
-      formData.set("url", newBlob.url);
+      formData.set("url", publicUrl);
       formData.set("name", file.name);
       formData.set("size", String(file.size));
       formData.set("mimeType", file.type || "application/octet-stream");
@@ -109,7 +97,7 @@ export function UploadForm({ error: initialError }: { error?: string }) {
       router.push("/dashboard");
       router.refresh();
     } catch (err) {
-      console.log("Error details:", err);
+      console.error("UPLOAD_ERROR:", err);
       setError(err instanceof Error ? err.message : "Lỗi không xác định khi upload");
     } finally {
       setIsSubmitting(false);
