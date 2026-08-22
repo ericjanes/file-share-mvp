@@ -31,7 +31,7 @@ export function UploadForm({ error: initialError }: { error?: string }) {
       const file = selectedFile;
       const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
 
-      const res = await fetch(`/api/direct-upload?filename=${encodeURIComponent(safeName)}`, {
+      const res = await fetch(`/api/upload-stream?filename=${encodeURIComponent(safeName)}`, {
         method: "POST",
         headers: {
           "content-type": file.type || "application/octet-stream",
