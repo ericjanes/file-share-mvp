@@ -5,7 +5,7 @@ export async function POST(request: Request) {
   const body = (await request.json()) as HandleUploadBody;
 
   try {
-    const json = await handleUpload({
+    const jsonResponse = await handleUpload({
       body,
       request,
       onBeforeGenerateToken: async () => {
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json(json);
+    return NextResponse.json(jsonResponse);
   } catch (error) {
     console.error("UPLOAD TOKEN ERROR:", error);
     return NextResponse.json(

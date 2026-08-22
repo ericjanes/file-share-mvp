@@ -29,16 +29,16 @@ export function UploadForm({ error: initialError }: { error?: string }) {
     setError("");
 
     try {
-      const blob = await upload(selectedFile.name, selectedFile, {
+      const safeName = selectedFile.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+      const pathname = `uploads/${Date.now()}-${safeName}`;
+
+      const newBlob = await upload(pathname, selectedFile, {
         access: "public",
         handleUploadUrl: "/api/upload",
-        onUploadProgress: ({ loaded, total, percentage }) => {
-          console.log(`Upload progress: ${loaded} / ${total} (${percentage}%)`);
-        },
       });
 
       const formData = new FormData();
-      formData.set("url", blob.url);
+      formData.set("url", newBlob.url);
       formData.set("name", selectedFile.name);
       formData.set("size", String(selectedFile.size));
       formData.set("mimeType", selectedFile.type || "application/octet-stream");
