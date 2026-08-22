@@ -1,5 +1,6 @@
 "use client";
 
+import { upload } from "@vercel/blob/client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -29,60 +30,17 @@ export function UploadForm({ error: initialError }: { error?: string }) {
 
     try {
       const file = selectedFile;
-      const pathname = `uploads/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
-      const callbackUrl = typeof window !== "undefined" ? `${window.location.origin}/api/upload` : "/api/upload";
+      console.log("Starting upload for:", file.name);
 
-      const tokenResponse = await fetch("/api/upload", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          type: "blob.generate-client-token",
-          payload: {
-            pathname,
-            callbackUrl,
-            clientPayload: null,
-            multipart: false,
-          },
-        }),
+      const blob = await upload(file.name, file, {
+        access: "public",
+        handleUploadUrl: "/api/upload",
       });
 
-      const tokenData = (await tokenResponse.json()) as {
-        clientToken?: string;
-        url?: string;
-        uploadUrl?: string;
-        signedUrl?: string;
-        error?: string;
-      };
+      console.log("Blob uploaded successfully:", blob.url);
 
-      if (!tokenResponse.ok || (!tokenData.clientToken && !tokenData.url && !tokenData.uploadUrl && !tokenData.signedUrl)) {
-        throw new Error(tokenData.error || "Không thể tạo upload token");
-      }
-
-      const uploadUrl = tokenData.url ?? tokenData.uploadUrl ?? tokenData.signedUrl;
-      if (!uploadUrl) {
-        throw new Error("API upload không trả về URL upload hợp lệ");
-      }
-
-      console.log("Uploading directly to Vercel Blob with URL:", uploadUrl);
-
-      const directUploadResponse = await fetch(uploadUrl, {
-        method: "PUT",
-        headers: {
-          "Content-Type": file.type || "application/octet-stream",
-        },
-        body: file,
-      });
-
-      if (!directUploadResponse.ok) {
-        const detail = await directUploadResponse.text().catch(() => "");
-        throw new Error(detail || `Upload trực tiếp thất bại (${directUploadResponse.status})`);
-      }
-
-      const publicUrl = uploadUrl.split("?")[0];
       const formData = new FormData();
-      formData.set("url", publicUrl);
+      formData.set("url", blob.url);
       formData.set("name", file.name);
       formData.set("size", String(file.size));
       formData.set("mimeType", file.type || "application/octet-stream");

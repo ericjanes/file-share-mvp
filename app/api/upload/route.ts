@@ -1,18 +1,6 @@
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { NextResponse } from "next/server";
 
-export async function OPTIONS(): Promise<NextResponse> {
-  return new NextResponse(null, {
-    status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      "Access-Control-Max-Age": "86400",
-    },
-  });
-}
-
 export async function POST(request: Request): Promise<NextResponse> {
   const body = (await request.json()) as HandleUploadBody;
 
@@ -20,26 +8,24 @@ export async function POST(request: Request): Promise<NextResponse> {
     const jsonResponse = await handleUpload({
       body,
       request,
-      onBeforeGenerateToken: async () => {
+      onBeforeGenerateToken: async (pathname) => {
+        console.log("Generating token for pathname:", pathname);
+
         return {
           allowedContentTypes: ["*/*"],
           maximumSizeInBytes: 1024 * 1024 * 1024,
         };
       },
-      onUploadCompleted: async ({ blob }) => {
-        console.log("Upload completed:", blob.url);
+      onUploadCompleted: async ({ blob, tokenPayload }) => {
+        console.log("Blob upload completed:", blob.url, tokenPayload);
       },
     });
 
-    return NextResponse.json(jsonResponse, {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-      },
-    });
+    return NextResponse.json(jsonResponse);
   } catch (error) {
     return NextResponse.json(
       { error: (error as Error).message },
-      { status: 400, headers: { "Access-Control-Allow-Origin": "*" } },
+      { status: 400 },
     );
   }
 }
