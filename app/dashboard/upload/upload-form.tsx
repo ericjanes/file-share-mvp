@@ -1,6 +1,5 @@
 "use client";
 
-import { upload } from "@vercel/blob/client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -30,17 +29,24 @@ export function UploadForm({ error: initialError }: { error?: string }) {
 
     try {
       const file = selectedFile;
-      console.log("Starting upload for:", file.name);
+      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
 
-      const blob = await upload(file.name, file, {
-        access: "public",
-        handleUploadUrl: "/api/upload",
+      const res = await fetch(`/api/direct-upload?filename=${encodeURIComponent(safeName)}`, {
+        method: "POST",
+        headers: {
+          "content-type": file.type || "application/octet-stream",
+        },
+        body: file,
       });
 
-      console.log("Blob uploaded successfully:", blob.url);
+      const data = (await res.json()) as { url?: string; error?: string };
+
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || "Upload thất bại");
+      }
 
       const formData = new FormData();
-      formData.set("url", blob.url);
+      formData.set("url", data.url);
       formData.set("name", file.name);
       formData.set("size", String(file.size));
       formData.set("mimeType", file.type || "application/octet-stream");
