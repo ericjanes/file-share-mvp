@@ -18,6 +18,8 @@ export default async function FileDetailPage({
     notFound();
   }
 
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+
   return (
     <main className="min-h-screen bg-slate-50 p-6 text-slate-900">
       <div className="mx-auto max-w-4xl rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
@@ -62,7 +64,7 @@ export default async function FileDetailPage({
             <h2 className="text-lg font-semibold">Share link</h2>
             <p className="mt-4 text-sm text-slate-600">Use this link to allow others to download the file securely.</p>
             <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-700">
-              {`http://localhost:3000/download/${file.id}`}
+              {`${baseUrl}/download/${file.id}`}
             </div>
           </div>
         </div>

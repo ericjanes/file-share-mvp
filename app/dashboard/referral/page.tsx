@@ -1,15 +1,8 @@
-"use client";
-
-import { useState } from "react";
-
+import { ReferralCopyButton } from "@/components/referral-copy-button";
 import { getUserReferralData } from "@/app/actions/referrals";
 
-export default function ReferralPage({
-  data,
-}: {
-  data: Awaited<ReturnType<typeof getUserReferralData>>;
-}) {
-  const [copied, setCopied] = useState(false);
+export default async function ReferralPage() {
+  const data = await getUserReferralData();
 
   if (!data) {
     return (
@@ -21,12 +14,6 @@ export default function ReferralPage({
       </main>
     );
   }
-
-  const copyLink = async () => {
-    await navigator.clipboard.writeText(data.referralLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
 
   return (
     <main className="min-h-screen bg-slate-50 p-6 text-slate-900">
@@ -69,12 +56,7 @@ export default function ReferralPage({
               <p className="mt-2 break-all text-sm font-medium text-slate-900">{data.referralLink}</p>
             </div>
             <div className="mt-4 flex gap-3">
-              <button
-                onClick={copyLink}
-                className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
-              >
-                {copied ? "Copied" : "Copy link"}
-              </button>
+              <ReferralCopyButton link={data.referralLink} />
               <a
                 href={data.referralLink}
                 target="_blank"
