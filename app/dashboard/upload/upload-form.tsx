@@ -30,14 +30,68 @@ export function UploadForm({ error: initialError }: { error?: string }) {
 
     try {
       const file = selectedFile;
-      const handleUploadUrl = typeof window !== "undefined"
-        ? `${window.location.origin}/api/upload`
-        : "/api/upload";
 
-      const newBlob = await upload(file.name, file, {
-        access: "public",
-        handleUploadUrl,
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          type: "blob.generate-client-token",
+          payload: {
+            pathname: `uploads/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`,
+            callbackUrl: typeof window !== "undefined" ? `${window.location.origin}/api/upload` : "/api/upload",
+            clientPayload: null,
+            multipart: false,
+          },
+        }),
       });
+
+      const data = (await response.json()) as {
+        clientToken?: string;
+        url?: string;
+        uploadUrl?: string;
+        signedUrl?: string;
+        error?: string;
+      };
+
+      if (!response.ok || (!data.clientToken && !data.url && !data.uploadUrl && !data.signedUrl)) {
+        throw new Error(data.error || "Không thể tạo upload token");
+      }
+
+      let newBlob: { url: string };
+
+      if (data.url || data.uploadUrl || data.signedUrl) {
+        const directUrl = data.url ?? data.uploadUrl ?? data.signedUrl;
+        if (!directUrl) {
+          throw new Error("Thiếu URL upload trực tiếp");
+        }
+
+        const directUploadResponse = await fetch(directUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": file.type || "application/octet-stream",
+          },
+          body: file,
+        });
+
+        if (!directUploadResponse.ok) {
+          const detail = await directUploadResponse.text().catch(() => "");
+          throw new Error(detail || `Upload trực tiếp thất bại (${directUploadResponse.status})`);
+        }
+
+        newBlob = { url: directUrl };
+      } else {
+        if (!data.clientToken) {
+          throw new Error("Thiếu client token để upload file");
+        }
+
+        const uploadWithToken = upload as any;
+        newBlob = await uploadWithToken(file.name, file, {
+          access: "public",
+          handleUploadToken: data.clientToken,
+        });
+      }
 
       const formData = new FormData();
       formData.set("url", newBlob.url);
