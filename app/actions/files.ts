@@ -10,32 +10,32 @@ import { getSessionCookie, verifySessionToken } from "@/lib/auth";
 import { MAX_UPLOAD_SIZE_BYTES, isAllowedMimeType, sanitizeStorageKey } from "@/lib/file-policy";
 import { sanitizeFilename } from "@/lib/utils";
 
-export async function uploadFile(formData: FormData) {
+export async function uploadFile(formData: FormData): Promise<{ success: boolean; error?: string; fileId?: string }> {
   try {
     const token = await getSessionCookie();
 
     if (!token) {
-      redirect("/auth/login?error=Please log in to upload files");
+      return { success: false, error: "Please log in to upload files" };
     }
 
     let payload;
     try {
       payload = await verifySessionToken(token);
     } catch {
-      redirect("/auth/login?error=Your session has expired");
+      return { success: false, error: "Your session has expired" };
     }
 
     const file = formData.get("file");
     if (!(file instanceof File)) {
-      redirect("/dashboard/upload?error=Please select a valid file");
+      return { success: false, error: "Please select a valid file" };
     }
 
     if (file.size <= 0 || file.size > MAX_UPLOAD_SIZE_BYTES) {
-      redirect("/dashboard/upload?error=File size exceeds the allowed limit");
+      return { success: false, error: "File size exceeds the allowed limit" };
     }
 
     if (!isAllowedMimeType(file.type)) {
-      redirect("/dashboard/upload?error=This file type is not allowed");
+      return { success: false, error: "This file type is not allowed" };
     }
 
     const originalName = sanitizeFilename(file.name || "untitled-file");
@@ -65,11 +65,14 @@ export async function uploadFile(formData: FormData) {
     });
 
     revalidatePath("/dashboard");
-    redirect(`/files/${created.id}`);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Upload failed";
-    console.error("Upload failed:", error);
-    redirect(`/dashboard/upload?error=${encodeURIComponent(message)}`);
+
+    return { success: true, fileId: created.id };
+  } catch (error: any) {
+    console.error("SERVER UPLOAD ERROR:", error);
+    return {
+      success: false,
+      error: error?.message || "Lỗi không xác định khi upload",
+    };
   }
 }
 
