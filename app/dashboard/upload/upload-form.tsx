@@ -29,19 +29,17 @@ export function UploadForm({ error: initialError }: { error?: string }) {
     setError("");
 
     try {
-      const safeName = selectedFile.name.replace(/[^a-zA-Z0-9.-]/g, "_");
-      const pathname = `uploads/${Date.now()}-${safeName}`;
-
-      const newBlob = await upload(pathname, selectedFile, {
+      const file = selectedFile;
+      const newBlob = await upload(file.name, file, {
         access: "public",
         handleUploadUrl: "/api/upload",
       });
 
       const formData = new FormData();
       formData.set("url", newBlob.url);
-      formData.set("name", selectedFile.name);
-      formData.set("size", String(selectedFile.size));
-      formData.set("mimeType", selectedFile.type || "application/octet-stream");
+      formData.set("name", file.name);
+      formData.set("size", String(file.size));
+      formData.set("mimeType", file.type || "application/octet-stream");
 
       const result = await uploadFile(formData);
 
@@ -52,8 +50,9 @@ export function UploadForm({ error: initialError }: { error?: string }) {
 
       router.push("/dashboard");
       router.refresh();
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Lỗi không xác định khi upload");
+    } catch (err) {
+      console.log("Error details:", err);
+      setError(err instanceof Error ? err.message : "Lỗi không xác định khi upload");
     } finally {
       setIsSubmitting(false);
     }
