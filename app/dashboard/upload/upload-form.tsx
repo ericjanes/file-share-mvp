@@ -22,21 +22,22 @@ export function UploadForm({ error: initialError }: { error?: string }) {
     setIsSubmitting(true);
     setError("");
 
-    const formData = new FormData(event.currentTarget);
-    const result = await uploadFile(formData);
+    try {
+      const formData = new FormData(event.currentTarget);
+      const result = await uploadFile(formData);
 
-    if (!result.success) {
-      setError(result.error ?? "Lỗi không xác định khi upload");
+      if (!result.success) {
+        setError(result.error ?? "Lỗi không xác định khi upload");
+        return;
+      }
+
+      router.push("/dashboard");
+      router.refresh();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Lỗi không xác định khi upload");
+    } finally {
       setIsSubmitting(false);
-      return;
     }
-
-    if (result.fileId) {
-      router.push(`/files/${result.fileId}`);
-      return;
-    }
-
-    setIsSubmitting(false);
   };
 
   const fileSizeMb = selectedFile ? (selectedFile.size / (1024 * 1024)).toFixed(2) : "0.00";
