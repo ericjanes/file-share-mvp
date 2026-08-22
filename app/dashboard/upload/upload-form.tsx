@@ -1,5 +1,6 @@
 "use client";
 
+import { upload } from "@vercel/blob/client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -19,11 +20,29 @@ export function UploadForm({ error: initialError }: { error?: string }) {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!selectedFile) {
+      setError("Please select a valid file");
+      return;
+    }
+
     setIsSubmitting(true);
     setError("");
 
     try {
-      const formData = new FormData(event.currentTarget);
+      const blob = await upload(selectedFile.name, selectedFile, {
+        access: "public",
+        handleUploadUrl: "/api/upload",
+        onUploadProgress: ({ loaded, total, percentage }) => {
+          console.log(`Upload progress: ${loaded} / ${total} (${percentage}%)`);
+        },
+      });
+
+      const formData = new FormData();
+      formData.set("url", blob.url);
+      formData.set("name", selectedFile.name);
+      formData.set("size", String(selectedFile.size));
+      formData.set("mimeType", selectedFile.type || "application/octet-stream");
+
       const result = await uploadFile(formData);
 
       if (!result.success) {

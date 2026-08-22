@@ -1,13 +1,10 @@
 "use server";
 
-import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
-import { storageProvider } from "@/lib/storage";
 import { getSessionCookie, verifySessionToken } from "@/lib/auth";
-import { MAX_UPLOAD_SIZE_BYTES, isAllowedMimeType, sanitizeStorageKey } from "@/lib/file-policy";
+import { MAX_UPLOAD_SIZE_BYTES, isAllowedMimeType } from "@/lib/file-policy";
 import { sanitizeFilename } from "@/lib/utils";
 
 export async function uploadFile(formData: FormData): Promise<{ success: boolean; error?: string; fileId?: string }> {
@@ -25,40 +22,39 @@ export async function uploadFile(formData: FormData): Promise<{ success: boolean
       return { success: false, error: "Your session has expired" };
     }
 
-    const file = formData.get("file");
-    if (!(file instanceof File)) {
-      return { success: false, error: "Please select a valid file" };
+    const rawUrl = formData.get("url");
+    const rawName = formData.get("name");
+    const rawSize = formData.get("size");
+    const rawMimeType = formData.get("mimeType");
+
+    if (typeof rawUrl !== "string" || !rawUrl) {
+      return { success: false, error: "Missing uploaded file URL" };
     }
 
-    if (file.size <= 0 || file.size > MAX_UPLOAD_SIZE_BYTES) {
+    if (typeof rawName !== "string" || !rawName) {
+      return { success: false, error: "Missing uploaded file name" };
+    }
+
+    const sizeInBytes = Number(rawSize ?? 0);
+    if (!Number.isFinite(sizeInBytes) || sizeInBytes <= 0 || sizeInBytes > MAX_UPLOAD_SIZE_BYTES) {
       return { success: false, error: "File size exceeds the allowed limit" };
     }
 
-    if (!isAllowedMimeType(file.type)) {
+    const mimeType = typeof rawMimeType === "string" && rawMimeType ? rawMimeType : "application/octet-stream";
+    if (!isAllowedMimeType(mimeType)) {
       return { success: false, error: "This file type is not allowed" };
     }
 
-    const originalName = sanitizeFilename(file.name || "untitled-file");
-    const key = `uploads/${payload.userId}/${randomUUID()}-${sanitizeStorageKey(originalName)}`;
-    const buffer = Buffer.from(await file.arrayBuffer());
-
-    await storageProvider.upload({
-      key,
-      buffer,
-      contentType: file.type || "application/octet-stream",
-      metadata: {
-        originalName,
-        ownerId: payload.userId,
-      },
-    });
+    const originalName = sanitizeFilename(rawName);
+    const storageKey = decodeURIComponent(new URL(rawUrl).pathname.replace(/^\/+/, ""));
 
     const created = await prisma.file.create({
       data: {
         ownerId: payload.userId,
         originalName,
-        storageKey: key,
-        fileSizeBytes: file.size,
-        mimeType: file.type || "application/octet-stream",
+        storageKey,
+        fileSizeBytes: sizeInBytes,
+        mimeType,
         status: "READY",
         visibility: "PUBLIC",
       },
