@@ -1,6 +1,12 @@
 import { uploadFile } from "@/app/actions/files";
 
-export default function UploadPage() {
+export default async function UploadPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ error?: string }>;
+}) {
+  const error = (await searchParams)?.error ?? "";
+
   return (
     <main className="min-h-screen bg-slate-50 p-6 text-slate-900">
       <div className="mx-auto max-w-2xl rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
@@ -17,6 +23,8 @@ export default function UploadPage() {
               <input type="file" name="file" required className="hidden" />
             </label>
           </div>
+
+          {error ? <p className="text-sm text-red-600">{decodeURIComponent(error)}</p> : null}
 
           <button type="submit" className="w-full rounded-xl bg-slate-900 px-4 py-3 font-medium text-white hover:bg-slate-700">
             Upload file

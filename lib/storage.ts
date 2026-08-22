@@ -1,10 +1,4 @@
-import {
-  DeleteObjectCommand,
-  GetObjectCommand,
-  PutObjectCommand,
-  S3Client,
-} from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { del, getDownloadUrl, put, type PutBlobResult } from "@vercel/blob";
 
 export type StorageUploadInput = {
   key: string;
@@ -14,62 +8,42 @@ export type StorageUploadInput = {
 };
 
 export interface StorageProvider {
-  upload(data: StorageUploadInput): Promise<void>;
+  upload(data: StorageUploadInput): Promise<PutBlobResult>;
   delete(key: string): Promise<void>;
   getSignedUrl(key: string, ttlSeconds?: number): Promise<string>;
   getPublicUrl?(key: string): string;
 }
 
-export class S3CompatibleStorage implements StorageProvider {
-  private client: S3Client;
-  private bucket: string;
-
-  constructor() {
-    this.bucket = process.env.S3_BUCKET ?? "file-share-mvp";
-    this.client = new S3Client({
-      region: process.env.S3_REGION ?? "auto",
-      endpoint: process.env.S3_ENDPOINT,
-      credentials: {
-        accessKeyId: process.env.S3_ACCESS_KEY_ID ?? "",
-        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? "",
-      },
-      forcePathStyle: (process.env.S3_FORCE_PATH_STYLE ?? "false") === "true",
-    });
+export class VercelBlobStorage implements StorageProvider {
+  private resolveKey(key: string) {
+    return key.replace(/^\/+/, "");
   }
 
-  async upload({ key, buffer, contentType, metadata }: StorageUploadInput) {
-    await this.client.send(
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-        Body: buffer,
-        ContentType: contentType,
-        Metadata: metadata,
-      }),
-    );
+  async upload({ key, buffer, contentType }: StorageUploadInput) {
+    const resolvedKey = this.resolveKey(key);
+
+    return put(resolvedKey, buffer, {
+      access: "public",
+      contentType,
+      addRandomSuffix: false,
+    });
   }
 
   async delete(key: string) {
-    await this.client.send(
-      new DeleteObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-      }),
-    );
+    const resolvedKey = this.resolveKey(key);
+    await del(resolvedKey);
   }
 
   async getSignedUrl(key: string, ttlSeconds = Number(process.env.DOWNLOAD_SIGNED_URL_TTL_SECONDS ?? 300)) {
-    const command = new GetObjectCommand({
-      Bucket: this.bucket,
-      Key: key,
-    });
-
-    return getSignedUrl(this.client, command, { expiresIn: ttlSeconds });
+    const publicUrl = this.getPublicUrl(key);
+    void ttlSeconds;
+    return getDownloadUrl(publicUrl);
   }
 
   getPublicUrl(key: string) {
-    return `${process.env.S3_PUBLIC_BASE_URL ?? ""}/${encodeURIComponent(key)}`.replace(/\/$/, "");
+    const resolvedKey = this.resolveKey(key);
+    return `https://blob.vercel-storage.com/${encodeURIComponent(resolvedKey)}`;
   }
 }
 
-export const storageProvider = new S3CompatibleStorage();
+export const storageProvider = new VercelBlobStorage();
