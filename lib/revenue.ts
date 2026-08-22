@@ -1,3 +1,5 @@
+import { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 
 export type RevenueBreakdown = {
@@ -63,7 +65,7 @@ async function applyUserBalance(
 ) {
   if (amount <= 0) return;
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.balanceTransaction.create({
       data: {
         userId,

@@ -1,5 +1,6 @@
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -217,7 +218,7 @@ export async function handleViolationAction(formData: FormData) {
   }
 
   if (action === "RESOLVED") {
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.report.update({
         where: { id: reportId },
         data: {

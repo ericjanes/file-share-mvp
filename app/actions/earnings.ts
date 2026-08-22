@@ -37,8 +37,13 @@ export async function getUserEarningsSummary() {
     orderBy: { createdAt: "desc" },
   });
 
-  const summary = events.reduce(
-    (acc, event) => {
+  const summary = events.reduce<{
+    gross: number;
+    uploader: number;
+    referral: number;
+    platform: number;
+  }>(
+    (acc: { gross: number; uploader: number; referral: number; platform: number }, event: (typeof events)[number]) => {
       acc.gross += Number(event.grossRevenue);
       acc.uploader += Number(event.uploaderShare);
       acc.referral += Number(event.referralShare);

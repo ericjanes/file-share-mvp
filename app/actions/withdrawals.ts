@@ -1,5 +1,6 @@
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -111,7 +112,7 @@ export async function requestWithdrawal(formData: FormData) {
     redirect("/dashboard?error=Requested amount exceeds your available balance");
   }
 
-  const withdrawal = await prisma.$transaction(async (tx) => {
+  const withdrawal = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const created = await tx.withdrawal.create({
       data: {
         userId: payload.userId,
@@ -210,7 +211,7 @@ export async function reviewWithdrawal(formData: FormData) {
   }
 
   if (action === "REJECTED") {
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.withdrawal.update({
         where: { id: withdrawalId },
         data: {
